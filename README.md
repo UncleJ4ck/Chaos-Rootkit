@@ -6,7 +6,7 @@
 
 
 
-  * Chaos-Rootkit is a x64 kernel-mode rootkit that can hide processes or elevate their privileges, work on the latest Windows versions .
+  * Chaos-Rootkit is a x64 ring0 rootkit with process hiding, privilege escalation, and capabilities for protecting and unprotecting processes, work on the latest Windows versions .
 
 # Features
 
@@ -16,9 +16,9 @@
 
 * Spawn elevated process: launch command prompt with elevated privileges .
 
-* SSDT hook (soon)
+* Unprotect all processes
 
-* TCP & UDP connections (soon)
+* Protect a specific process with any given protection level (WinSystem, WinTcb, Windows, Authenticode, Lsa, Antimalware) .
 
 
 # Technical Details
@@ -54,12 +54,14 @@
 
   ![image](https://user-images.githubusercontent.com/60795188/227380533-0e80298c-0800-485a-8797-1cc7a0efb757.png)
 
-* Note: After removing a node from a PLIST_ENTRY, we should set the pointer to NULL to ensure that the nodes before and after the removed node are no longer pointing to it. This can prevent potential null pointer dereferences and avoid BSODs.
+* Note: After removing the node from PLIST_ENTRY structure, it is important to set the corresponding pointer to NULL, Otherwise, when attempting to close the process, the PLIST_ENTRY structure will get sent to the PspDeleteProcess API to free all its resources, after the API does not find the process in the structure, it will suspect that the process has already been freed, resulting in a Blue Screen of Death (BSOD), as shown below  .
 
-  ![image](https://user-images.githubusercontent.com/60795188/227399548-54da930d-031f-4b82-9e8a-ed7cc6e42a4a.png)
-## Elevate specific process privileges
+  ![image](https://user-images.githubusercontent.com/60795188/228383831-f1a4940a-4ebb-4478-b964-ec54d4eab8e7.png)
 
-* When a process is created, it inherits the token of the user who created it, The token is used by the system to determine what actions the process can perform. The token contains information about the user's security identifier (SID), group memberships, and privileges.
+
+## Elevate process privileges
+
+* When a process is created, it inherits the token of the user who created it, The token is used by the system to determine what actions the process can perform, The token contains information about the user's security identifier (SID), group memberships, and privileges.
 
   ![image](https://user-images.githubusercontent.com/60795188/226148214-1d63149a-e2e6-4938-9067-30df7939c9db.png)
   
