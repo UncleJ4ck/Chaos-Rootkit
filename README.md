@@ -9,8 +9,9 @@
 
 * Gui version
   
-  ![29](https://github.com/ZeroMemoryEx/Chaos-Rootkit/assets/60795188/110f3c3e-3225-451b-a1f9-c00a9f5d0a70)
-  
+   ![image](https://github.com/user-attachments/assets/2c609a99-5050-45f8-9411-aba1c41fb77e)
+
+    
 <p align="center">
   <a href="https://www.buymeacoffee.com/ZeroMemoryEx" target="_blank">
     <img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee">
