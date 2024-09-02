@@ -70,7 +70,6 @@ NTSTATUS WINAPI FakeNtCreateFile2(
     ULONG              EaLength
 ) {
     NTSTATUS status = STATUS_UNSUCCESSFUL; 
-    int requestorPid = 0x0;
     KMUTEX Mutex;
     KeInitializeMutex(&Mutex, 0);
     KeWaitForSingleObject(&Mutex, Executive, ExGetPreviousMode(), FALSE, NULL);
