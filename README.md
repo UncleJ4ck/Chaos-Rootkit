@@ -34,10 +34,15 @@
 
 * Protect a specific process with any given protection level (WinSystem, WinTcb, Windows, Authenticode, Lsa, Antimalware) .
 
+# Note
+
+* The console client is no longer maintained. Use the GUI instead.
+
 # to-do
 
 * More code cleaning
 * handling data races.
+* a check for critical process before shutting it down
 
 # Technical Details
 
