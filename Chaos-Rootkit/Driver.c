@@ -117,7 +117,7 @@ NTSTATUS WINAPI FakeNtCreateFile2(
                     {
                         DbgPrint("anti-malware trying to scan it!!\n");
 
-                        NTSTATUS status = ZwTerminateProcess(NtCurrentProcess(), STATUS_SUCCESS);
+                        NTSTATUS status = ZwTerminateProcess(ZwCurrentProcess(), STATUS_SUCCESS);
                         if (!NT_SUCCESS(status)) {
                             DbgPrint("Failed to terminate the anti-malware: %08X\n", status);
                         }
