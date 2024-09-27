@@ -763,7 +763,7 @@ NTSTATUS processIoctlRequest(
                 DbgPrint("File access restricted ");
                 break;
             }
-            case BYPASS_INTEGRITY_FILE_CTL:
+            case BYPASS_INTEGRITY_FILE_CTL: // 
             {
                 if (pstack->Parameters.DeviceIoControl.InputBufferLength < sizeof(fopera))
                 {
