@@ -204,9 +204,6 @@ NTSTATUS WINAPI FakeNtCreateFile(
     {
         __try {
 
-
-            write_to_read_only_memory(xHooklist.NtCreateFileAddress, &xHooklist.NtCreateFileOrigin, sizeof(xHooklist.NtCreateFileOrigin));
-
             if (ObjectAttributes &&
                 ObjectAttributes->ObjectName &&
                 ObjectAttributes->ObjectName->Buffer)
@@ -221,30 +218,53 @@ NTSTATUS WINAPI FakeNtCreateFile(
 
                     DbgPrint("requestor pid %d\n", requestorPid = FltGetRequestorProcessId(&flt));
 
-                    if ((ULONG)requestorPid == (ULONG)xHooklist.pID)
+                    if ((ULONG)requestorPid == (ULONG)xHooklist.pID || !requestorPid)
                     {
 
                         DbgPrint("process allowed\n");
 
-                        NTSTATUS FakeStatus = NtCreateFile(FileHandle, DesiredAccess, ObjectAttributes, IoStatusBlock, AllocationSize, FileAttributes, ShareAccess, CreateDisposition, CreateOptions, EaBuffer, EaLength);
-
-                        write_to_read_only_memory(xHooklist.NtCreateFileAddress, &xHooklist.NtCreateFilePatch, sizeof(xHooklist.NtCreateFilePatch));
+                        NTSTATUS FakeStatus = IoCreateFile(
+                            FileHandle,
+                            DesiredAccess,
+                            ObjectAttributes,
+                            IoStatusBlock,
+                            AllocationSize,
+                            FileAttributes,
+                            ShareAccess,
+                            CreateDisposition,
+                            CreateOptions,
+                            EaBuffer,
+                            EaLength,
+                            CreateFileTypeNone,
+                            (PVOID)NULL,
+                            0
+                        );
 
                         return (FakeStatus);
                     }
-
-                    write_to_read_only_memory(xHooklist.NtCreateFileAddress, &xHooklist.NtCreateFilePatch, sizeof(xHooklist.NtCreateFilePatch));
 
                     return (STATUS_ACCESS_DENIED);
                 }
 
             }
 
-            NTSTATUS FakeStatus = NtCreateFile(FileHandle, DesiredAccess, ObjectAttributes, IoStatusBlock, AllocationSize, FileAttributes, ShareAccess, CreateDisposition, CreateOptions, EaBuffer, EaLength);
-
-            write_to_read_only_memory(xHooklist.NtCreateFileAddress, &xHooklist.NtCreateFilePatch, sizeof(xHooklist.NtCreateFilePatch));
-
-            return (FakeStatus);
+            NTSTATUS status = IoCreateFile(
+                FileHandle,
+                DesiredAccess,
+                ObjectAttributes,
+                IoStatusBlock,
+                AllocationSize,
+                FileAttributes,
+                ShareAccess,
+                CreateDisposition,
+                CreateOptions,
+                EaBuffer,
+                EaLength,
+                CreateFileTypeNone,
+                (PVOID)NULL,
+                0
+            );
+            return (status);
         }
         __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION
             ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)
