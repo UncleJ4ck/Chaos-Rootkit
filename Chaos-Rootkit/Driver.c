@@ -46,6 +46,7 @@ typedef struct x_hooklist {
     void* NtCreateFileAddress;
     uintptr_t* NtCreateFileHookAddress;
 
+    int takeCopy;
     int pID;
     wchar_t filename[MAX_PATH];
     UNICODE_STRING decoyFile;
@@ -351,8 +352,13 @@ DWORD initializehooklist(Phooklist hooklist_s, fopera rfileinfo, int Option)
 
     memcpy(hooklist_s->NtCreateFilePatch + 2, &hooklist_s->NtCreateFileHookAddress, sizeof(void*));
 
-    memcpy(hooklist_s->NtCreateFileOrigin, hooklist_s->NtCreateFileAddress, 12);
 
+    if (hooklist_s->takeCopy == 0)
+    {
+        DbgPrint("taking a copy before hook.. \n");
+        memcpy(hooklist_s->NtCreateFileOrigin, hooklist_s->NtCreateFileAddress, 12);
+        hooklist_s->takeCopy = 69;
+    }
     hooklist_s->pID = rfileinfo.rpid;
 
     RtlCopyMemory(hooklist_s->filename, rfileinfo.filename, sizeof(rfileinfo.filename));
@@ -770,9 +776,9 @@ NTSTATUS processIoctlRequest(
                 }
                 fopera rfileinfo = { 0 };
                 RtlCopyMemory(&rfileinfo, Irp->AssociatedIrp.SystemBuffer, sizeof(rfileinfo));
+
+                RtlIsZeroMemory(&xHooklist, sizeof(xHooklist));
                 pstatus = initializehooklist(&xHooklist, rfileinfo,1);
-
-
                 DbgPrint("File access restricted ");
                 break;
             }
@@ -786,6 +792,7 @@ NTSTATUS processIoctlRequest(
                 fopera rfileinfo = { 0 };
                 RtlCopyMemory(&rfileinfo, Irp->AssociatedIrp.SystemBuffer, sizeof(rfileinfo));
 
+                RtlIsZeroMemory(&xHooklist, sizeof(xHooklist));
                 pstatus = initializehooklist(&xHooklist, rfileinfo,2);
 
                 DbgPrint("bypass integrity check ");
