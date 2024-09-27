@@ -777,7 +777,6 @@ NTSTATUS processIoctlRequest(
                 fopera rfileinfo = { 0 };
                 RtlCopyMemory(&rfileinfo, Irp->AssociatedIrp.SystemBuffer, sizeof(rfileinfo));
 
-                RtlIsZeroMemory(&xHooklist, sizeof(xHooklist));
                 pstatus = initializehooklist(&xHooklist, rfileinfo,1);
                 DbgPrint("File access restricted ");
                 break;
@@ -791,8 +790,6 @@ NTSTATUS processIoctlRequest(
                 }
                 fopera rfileinfo = { 0 };
                 RtlCopyMemory(&rfileinfo, Irp->AssociatedIrp.SystemBuffer, sizeof(rfileinfo));
-
-                RtlIsZeroMemory(&xHooklist, sizeof(xHooklist));
                 pstatus = initializehooklist(&xHooklist, rfileinfo,2);
 
                 DbgPrint("bypass integrity check ");
